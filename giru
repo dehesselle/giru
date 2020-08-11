@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+### description ################################################################
+
+# Provide initscript-style service for gitlab-runner.
+
+### includes ###################################################################
+
+INCLUDE_DIR=$(dirname $0)/bash_d
+source $INCLUDE_DIR/1_include_.sh
+include_file daemon_.sh
+include_file echo_.sh
+include_file str_.sh
+include_file xdg_.sh
+
+### variables ##################################################################
+
+RUNNER=/opt/homebrew/bin/gitlab-runner
+RUNNER_CONFIG_DIR=$XDG_CONFIG_HOME/gitlab-runner
+RUNNER_CONFIG_FILE=
+
+DAEMON_NAME=gitlab-runner
+DAEMON_SHUTDOWN_GRACE=60   # gitlab-runner takes its time to shutdown gracefully
+
+### functions ##################################################################
+
+function daemon_print_usage
+{
+  echo_i "usage: $0 {service} {start|stop|restart|status}"
+}
+
+function daemon_run
+{
+  local log_dir=$(grep builds_dir $RUNNER_CONFIG_FILE | awk '{ print $3 }')
+  log_dir="${log_dir%\"}"
+  log_dir="${log_dir#\"}"
+
+  if $(str_is_empty $log_dir); then
+    log_dir=$XDG_CACHE_HOME
+    mkdir -p $log_dir
+  else
+    if [ ! -d $log_dir ]; then
+      echo_e "not a directory: log_dir = $log_dir"
+      exit 1
+    fi
+  fi
+
+  local service=$(basename -s .toml $RUNNER_CONFIG_FILE)
+
+  $RUNNER run \
+    --config $RUNNER_CONFIG_FILE \
+    --service $service \
+    1>> $log_dir/${service}_stdout.log \
+    2>> $log_dir/${service}_stderr.log \
+    &
+
+  echo $! > $DAEMON_PIDFILE
+}
+
+### aliases ####################################################################
+
+# Nothing here.
+
+### main #######################################################################
+
+if [ $# -eq 2 ]; then
+  RUNNER_CONFIG_FILE=$RUNNER_CONFIG_DIR/$1.toml
+
+  if [ -f $RUNNER_CONFIG_FILE ]; then
+    daemon_dispatch $2
+  else
+    echo_e "unknown service $1"
+  fi
+else
+  daemon_print_usage
+  exit 1
+fi
