@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# SPDX-License-Identifier: GPL-2.0-or-later
+# https://github.com/dehesselle/giru
+
 ### description ################################################################
 
 # Provide initscript-style service for gitlab-runner.
