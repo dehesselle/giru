@@ -5,7 +5,9 @@
 
 ### description ################################################################
 
-# Provide initscript-style service for gitlab-runner.
+# Provide initscript-style service for gitlab-runner on macOS.
+# Requires the following environment variables to operate:
+#    HOMEBREW_PREFIX       to find gitlab-runner binary
 
 ### includes ###################################################################
 
@@ -18,8 +20,8 @@ include_file xdg_.sh
 
 ### variables ##################################################################
 
-RUNNER=/opt/homebrew/bin/gitlab-runner
-RUNNER_CONFIG_DIR=$XDG_CONFIG_HOME/gitlab-runner
+RUNNER=$HOMEBREW_PREFIX/bin/gitlab-runner
+RUNNER_CONFIG_DIR=$(xdg_get_config_home)/gitlab-runner
 RUNNER_CONFIG_FILE=
 
 DAEMON_NAME=gitlab-runner
@@ -39,7 +41,7 @@ function daemon_run
   log_dir="${log_dir#\"}"
 
   if $(str_is_empty $log_dir); then
-    log_dir=$XDG_CACHE_HOME
+    log_dir=$(xdg_get_cache_home)
     mkdir -p $log_dir
   else
     if [ ! -d $log_dir ]; then
@@ -60,21 +62,30 @@ function daemon_run
   echo $! > $DAEMON_PIDFILE
 }
 
+function main
+{
+  local service=$1
+  local command=$2
+
+  if [ $# -eq 2 ]; then
+    RUNNER_CONFIG_FILE=$RUNNER_CONFIG_DIR/$service.toml
+    DAEMON_PIDFILE=$(xdg_get_runtime_dir)/$service.pid
+
+    if [ -f $RUNNER_CONFIG_FILE ]; then
+      daemon_dispatch $command
+    else
+      echo_e "unknown service $service"
+    fi
+  else
+    daemon_print_usage
+    exit 1
+  fi
+}
+
 ### aliases ####################################################################
 
 # Nothing here.
 
 ### main #######################################################################
 
-if [ $# -eq 2 ]; then
-  RUNNER_CONFIG_FILE=$RUNNER_CONFIG_DIR/$1.toml
-
-  if [ -f $RUNNER_CONFIG_FILE ]; then
-    daemon_dispatch $2
-  else
-    echo_e "unknown service $1"
-  fi
-else
-  daemon_print_usage
-  exit 1
-fi
+main $*
