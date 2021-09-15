@@ -7,24 +7,23 @@
 ### description ################################################################
 
 # Provide initscript-style start/stop for gitlab-runner on macOS.
-#
-# Requires the following environment variables to operate:
-#    HOMEBREW_PREFIX       to find gitlab-runner binary
 
-### includes ###################################################################
+### shellcheck #################################################################
 
-INCLUDE_DIR=$(dirname "$0")/bash_d
-# shellcheck source=bash_d/1_include.sh
-source "$INCLUDE_DIR/1_include.sh"
-include_file daemon
-include_file echo
-include_file xdg
+# Nothing here.
+
+### dependencies ###############################################################
+
+# shellcheck source=bash_d/bash_d.sh
+source "$(dirname "$0")"/bash_d/bash_d.sh
+bash_d_include daemon
+bash_d_include echo
+bash_d_include config
 
 ### variables ##################################################################
 
-RUNNER=$HOMEBREW_PREFIX/bin/gitlab-runner
-RUNNER_CONFIG_DIR=$(xdg_get_config_home)/gitlab-runner
 RUNNER_CONFIG_FILE=
+RUNNER_BIN=
 
 # shellcheck disable=SC2034 # defined in daemon.sh
 DAEMON_NAME=gitlab-runner
@@ -63,7 +62,7 @@ function daemon_run
   local service
   service=$(basename -s .toml "$RUNNER_CONFIG_FILE")
 
-  $RUNNER run \
+  $RUNNER_BIN run \
     --config "$RUNNER_CONFIG_FILE" \
     --service "$service" \
     1>> "$log_dir/${service}"_stdout.log \
@@ -79,18 +78,27 @@ function main
   local command=$2
 
   if [ $# -eq 2 ]; then
-    RUNNER_CONFIG_FILE=$RUNNER_CONFIG_DIR/$service.toml
-    DAEMON_PIDFILE=$(xdg_get_runtime_dir)/$service.pid
+    if RUNNER_CONFIG_FILE=$(config_get runner config_dir)/$service.toml; then
+      if RUNNER_BIN=$(config_get runner binary); then
 
-    if [ ! -x "$RUNNER" ]; then
-      echo_e "runner not usable: $RUNNER"
-      exit 1
-    fi
+        if [ ! -x "$RUNNER_BIN" ]; then
+          echo_e "runner not usable: $RUNNER_BIN"
+          exit 1
+        fi
 
-    if [ -f "$RUNNER_CONFIG_FILE" ]; then
-      daemon_dispatch "$command"
+        if [ -f "$RUNNER_CONFIG_FILE" ]; then
+          DAEMON_PIDFILE=$(xdg_get_runtime_dir)/$service.pid
+          daemon_dispatch "$command"
+        else
+          echo_e "no service $service in $(dirname "$RUNNER_CONFIG_FILE")"
+          exit 1
+        fi
+      else
+        echo_e "runner|binary missing in $CONFIG_FILE"
+        exit 1
+      fi
     else
-      echo_e "unknown service $service"
+      echo_e "runner|config_dir missing in $CONFIG_FILE"
       exit 1
     fi
   else
